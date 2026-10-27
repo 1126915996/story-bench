@@ -1,0 +1,173 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>故事影像工作台</title>
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:#0b1220;color:#e6eefc;font:15px/1.6 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{display:flex;min-height:100vh}
+aside{width:200px;border-right:1px solid #1d2b40;padding:18px 12px;flex:0 0 auto}
+aside h1{font-size:15px;margin:0 0 18px;color:#9fd2ff;letter-spacing:1px}
+nav a{display:block;padding:10px 12px;border-radius:9px;color:#a9bed6;text-decoration:none;margin-bottom:6px;cursor:pointer}
+nav a.on,nav a:hover{background:#16273c;color:#fff}
+main{flex:1;padding:26px 30px;max-width:1100px}
+h2{font-size:20px;margin:0 0 16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+input,textarea,select{background:#101b2b;border:1px solid #22344c;color:#e6eefc;border-radius:9px;padding:10px 12px;font:inherit;width:100%}
+textarea{min-height:90px;resize:vertical}
+button{background:#1b6ea8;border:0;color:#fff;border-radius:9px;padding:10px 16px;font:inherit;cursor:pointer}
+button.ghost{background:#16273c;color:#a9bed6}
+button:disabled{opacity:.5;cursor:default}
+.card{background:#0f1a2a;border:1px solid #1d2b40;border-radius:14px;padding:16px;margin-bottom:14px}
+.tag{font-size:12px;color:#7fa4c4;background:#132234;border-radius:6px;padding:2px 8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.shot img,.shot video{width:100%;border-radius:10px;display:block;background:#0a1420;aspect-ratio:9/16;object-fit:cover}
+.muted{color:#7d97b3;font-size:13px}
+pre{background:#0a1420;border:1px solid #1d2b40;border-radius:10px;padding:12px;overflow:auto;font-size:13px}
+</style>
+<div class="wrap">
+<aside>
+  <h1>🐳 故事影像工作台</h1>
+  <nav>
+    <a data-v="home" class="on">创作首页</a>
+    <a data-v="free">自由创作</a>
+    <a data-v="projects">我的项目</a>
+    <a data-v="assets">我的资产</a>
+    <a data-v="admin">接口设置</a>
+  </nav>
+</aside>
+<main id="main"></main>
+</div>
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const api = (u, o) => fetch('api' + u, { headers: { 'Content-Type': 'application/json' }, ...o }).then(r => r.json());
+let state = { view: 'home', project: null, projects: [] };
+
+const views = {
+  async home() {
+    const ps = await api('/projects');
+    return `<h2>创作首页</h2>
+      <div class="card"><div class="muted">三步走：写一个故事 → 拆成分镜 → 逐个出图配音，最后合成。</div></div>
+      <div class="grid">${ps.map(p => `<div class="card" data-open="${p.id}" style="cursor:pointer">
+        <div style="font-weight:600">${p.name}</div>
+        <div class="muted">${(p.shots || []).length} 个分镜 · ${p.style || '未设风格'}</div></div>`).join('') || '<div class="muted">还没有项目，去「我的项目」新建一个</div>'}</div>`;
+  },
+  async free() {
+    return `<h2>自由创作</h2>
+      <div class="card">
+        <div class="row"><input id="f-name" placeholder="项目名，比如：深海的一封信"></div>
+        <div class="row"><input id="f-style" placeholder="风格，比如：治愈动画 / 电影感 / 赛博"></div>
+        <div class="row"><textarea id="f-story" placeholder="把故事写在这里，一两百字就够"></textarea></div>
+        <div class="row"><button id="f-go">建项目</button></div>
+        <div id="f-out" class="muted"></div>
+      </div>`;
+  },
+  async projects() {
+    const ps = await api('/projects');
+    return `<h2>我的项目</h2>
+      <div class="row"><input id="p-name" placeholder="新项目名字"><button id="p-new">新建</button></div>
+      ${ps.map(p => `<div class="card"><div class="row" style="justify-content:space-between;align-items:center">
+        <div><b>${p.name}</b> <span class="tag">${(p.shots||[]).length} 镜</span></div>
+        <div class="row" style="margin:0"><button class="ghost" data-open="${p.id}">打开</button><button class="ghost" data-del="${p.id}">删除</button></div>
+      </div></div>`).join('') || '<div class="muted">还没有项目</div>'}`;
+  },
+  async assets() {
+    const ps = await api('/projects');
+    const shots = ps.flatMap(p => (p.shots || []).filter(s => s.image).map(s => ({ ...s, pname: p.name })));
+    return `<h2>我的资产</h2><div class="grid">${shots.map(s => `<div class="card shot">
+      <img src="${s.image}" alt=""><div class="muted" style="margin-top:8px">${s.text.slice(0, 40)}</div></div>`).join('') || '<div class="muted">还没有出图</div>'}</div>`;
+  },
+  async admin() {
+    const c = await api('/config');
+    const f = (k, label) => `<div class="card"><b>${label}</b>
+      <div class="row"><input id="c-${k}-baseUrl" placeholder="接口地址，例如 https://api.xxx.com/v1" value="${c[k].baseUrl || ''}"></div>
+      <div class="row"><input id="c-${k}-key" placeholder="密钥（留空＝不改）" value=""></div>
+      <div class="row"><input id="c-${k}-model" placeholder="模型名" value="${c[k].model || ''}"></div>
+      ${k === 'image' ? `<div class="row"><input id="c-image-size" placeholder="尺寸" value="${c.image.size || '1024x1792'}"></div>` : ''}
+    </div>`;
+    return `<h2>接口设置</h2>
+      <div class="muted" style="margin-bottom:12px">剧本走 chat/completions，生图走 images/generations，视频按你填的地址直接提交。都是 OpenAI 兼容格式，哪家都行。</div>
+      ${f('script', '剧本 / 分镜（OpenAI 兼容 chat）')}
+      ${f('image', '生图（OpenAI 兼容 images）')}
+      ${f('video', '视频生成（地址 + 密钥）')}
+      <div class="row"><button id="c-save">保存</button><span id="c-say" class="muted"></span></div>`;
+  },
+  async project(id) {
+    const p = await api('/projects/' + id);
+    state.project = p;
+    return `<h2>${p.name}</h2>
+      <div class="card">
+        <div class="row"><input id="pj-style" value="${p.style || ''}" placeholder="风格"></div>
+        <div class="row"><textarea id="pj-story" placeholder="故事正文">${p.story || ''}</textarea></div>
+        <div class="row"><button id="pj-save" class="ghost">存一下</button><button id="pj-script">拆成分镜</button><span id="pj-say" class="muted"></span></div>
+      </div>
+      <div class="row"><button id="sh-add" class="ghost">+ 加一个空镜头</button></div>
+      <div class="grid" id="shots">${(p.shots || []).map(shotCard).join('')}</div>`;
+  },
+};
+const shotCard = (s) => `<div class="card shot" data-shot="${s.id}">
+  <img src="${s.image || ''}" alt="" style="${s.image ? '' : 'display:none'}">
+  <textarea data-t="${s.id}" placeholder="这个镜头的画面/台词">${s.text || ''}</textarea>
+  <div class="row" style="margin-top:8px">
+    <button data-img="${s.id}">出图</button>
+    <button class="ghost" data-vid="${s.id}">出视频</button>
+    <button class="ghost" data-delsh="${s.id}">删</button>
+  </div>
+  <div class="muted" data-say="${s.id}"></div>
+</div>`;
+
+async function render() {
+  const m = $('#main');
+  m.innerHTML = await views[state.view === 'project' ? 'home' : state.view]?.() ?? '';
+  if (state.view === 'project') m.innerHTML = await views.project(state.projectId);
+  bind();
+}
+
+function bind() {
+  document.querySelectorAll('nav a').forEach(a => a.onclick = () => { state.view = a.dataset.v; document.querySelectorAll('nav a').forEach(x => x.classList.toggle('on', x === a)); render(); });
+  document.querySelectorAll('[data-open]').forEach(el => el.onclick = () => { state.projectId = el.dataset.open; state.view = 'project'; render(); });
+  document.querySelectorAll('[data-del]').forEach(el => el.onclick = async () => { if (confirm('删掉这个项目？')) { await api('/projects/' + el.dataset.del, { method: 'DELETE' }); render(); } });
+
+  if ($('#f-go')) $('#f-go').onclick = async () => {
+    const p = await api('/projects', { method: 'POST', body: JSON.stringify({ name: $('#f-name').value || '未命名', style: $('#f-style').value, story: $('#f-story').value }) });
+    state.projectId = p.id; state.view = 'project'; render();
+  };
+  if ($('#p-new')) $('#p-new').onclick = async () => { await api('/projects', { method: 'POST', body: JSON.stringify({ name: $('#p-name').value || '未命名' }) }); render(); };
+  if ($('#c-save')) $('#c-save').onclick = async () => {
+    const o = {};
+    for (const k of ['script', 'image', 'video']) {
+      o[k] = { baseUrl: $('#c-' + k + '-baseUrl').value.trim(), model: $('#c-' + k + '-model').value.trim() };
+      const key = $('#c-' + k + '-key').value.trim();
+      if (key) o[k].key = key;
+    }
+    if ($('#c-image-size')) o.image.size = $('#c-image-size').value.trim();
+    await api('/config', { method: 'POST', body: JSON.stringify(o) });
+    $('#c-say').textContent = '存好了';
+  };
+  if ($('#pj-save')) $('#pj-save').onclick = async () => {
+    await api('/projects/' + state.projectId, { method: 'PUT', body: JSON.stringify({ style: $('#pj-style').value, story: $('#pj-story').value }) });
+    $('#pj-say').textContent = '已保存';
+  };
+  if ($('#pj-script')) $('#pj-script').onclick = async () => {
+    $('#pj-say').textContent = '在拆了…';
+    try { await api(`/projects/${state.projectId}/generate-script`, { method: 'POST' }); render(); }
+    catch (e) { $('#pj-say').textContent = '失败：' + e.message; }
+  };
+  if ($('#sh-add')) $('#sh-add').onclick = async () => { await api(`/projects/${state.projectId}/shots`, { method: 'POST', body: JSON.stringify({ text: '', prompt: '' }) }); render(); };
+  document.querySelectorAll('[data-t]').forEach(el => el.onblur = async () => { await api(`/projects/${state.projectId}/shots/${el.dataset.t}`, { method: 'PUT', body: JSON.stringify({ text: el.value, prompt: el.value }) }); });
+  document.querySelectorAll('[data-delsh]').forEach(el => el.onclick = async () => { await api(`/projects/${state.projectId}/shots/${el.dataset.delsh}`, { method: 'DELETE' }); render(); });
+  document.querySelectorAll('[data-img]').forEach(el => el.onclick = async () => {
+    const say = document.querySelector(`[data-say="${el.dataset.img}"]`);
+    say.textContent = '出图里…（要几十秒）';
+    try { await api(`/projects/${state.projectId}/shots/${el.dataset.img}/generate-image`, { method: 'POST' }); render(); }
+    catch (e) { say.textContent = '失败：' + e.message; }
+  });
+  document.querySelectorAll('[data-vid]').forEach(el => el.onclick = async () => {
+    const say = document.querySelector(`[data-say="${el.dataset.vid}"]`);
+    say.textContent = '提交视频任务…';
+    try { await api(`/projects/${state.projectId}/shots/${el.dataset.vid}/generate-video`, { method: 'POST' }); render(); }
+    catch (e) { say.textContent = '失败：' + e.message; }
+  });
+}
+render();
+</script>

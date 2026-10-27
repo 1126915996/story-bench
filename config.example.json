@@ -1,0 +1,5 @@
+{
+  "script": { "baseUrl": "", "key": "", "model": "" },
+  "image": { "baseUrl": "", "key": "", "model": "", "size": "1024x1792" },
+  "video": { "baseUrl": "", "key": "", "model": "" }
+}
